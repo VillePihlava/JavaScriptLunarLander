@@ -1,0 +1,1 @@
+web: gunicorn JavaScriptLunarLander.wsgi --log-file -
