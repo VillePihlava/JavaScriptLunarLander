@@ -1,0 +1,17 @@
+<table>
+    <thead>
+        <tr>
+            <th>Score</th>
+            <th>Date</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for score in scores %}
+        <tr>
+            <td>{{score.score}}</td>
+            <td>{{score.date}}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+
+</table>

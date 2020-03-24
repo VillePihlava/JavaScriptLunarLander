@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Lunar Lander{% endblock %}
+
+{% block header %}
+{{ block.super }}
+<script>
+
+    document.addEventListener('keydown', (event) => {
+        const keyName = event.key;
+        if (keyName === 'W' || keyName === 'w') {
+            up = true
+        }
+        if (keyName === 'A' || keyName === 'a') {
+            left = true
+        }
+        if (keyName === 'D' || keyName === 'd') {
+            right = true
+        }
+        if (keyName === 'R' || keyName === 'r') {
+            R = true
+        }
+    }, false);
+
+    document.addEventListener('keyup', (event) => {
+        const keyName = event.key;
+        if (keyName === 'W' || keyName === 'w') {
+            up = false
+        }
+        if (keyName === 'A' || keyName === 'a') {
+            left = false
+        }
+        if (keyName === 'D' || keyName === 'd') {
+            right = false
+        }
+        if (keyName === 'R' || keyName === 'r') {
+            R = false
+        }
+    }, false);
+    // Keys
+    var up = false
+    var left = false
+    var right = false
+    var R = false
+    // Frame size
+    var frameWidth = 640
+    var frameHeight = 640
+
+    // Game variables
+    var interval
+    var player
+    var points
+    var pointsText = new TextObject(510, 24, "white", "Points: 0", "20px Arial")
+    var score = 0
+    var scoreText = new TextObject(14, 24, "white", "Score: 0", "20px Arial")
+    var middleText = new TextObject(50, 250, "white", "", "30px Arial")
+    // The map of the game A = air, G = ground
+    var stringMap = ["GGGGGGGGGGGGGGGGGGGG",
+        "GAAAGGAAAAAAAAAAGGGG",
+        "GAAAGGAAAAAAAAAAGGGG",
+        "GAAAGGAAAAAAAAAAGGGG",
+        "GAAGGGAAAGGGGAAAGGGG",
+        "GAAAGGAAAGGGGAAAGGGG",
+        "GAAAGGAAAGGAAAAAGGGG",
+        "GGAAGGAAAGGAAAAAGGGG",
+        "GAAAGGAAAGGAAAAAGGGG",
+        "GAAAGAAAAGGAAAGGGGGG",
+        "GAAAAAAAAGGAAAAAGGGG",
+        "GAAAAAAAAGGAAAAAGGGG",
+        "GAAAAAAAAGGAAAAAGGGG",
+        "GAAAAAAAAGGAAAAAAAAG",
+        "GAAAAAAAAGGAAAAAAAAG",
+        "GAAGGGGGGGGGGGAAGAAG",
+        "GAAGGGGGGGGGGGAAGAAG",
+        "GAAAAAAAAAAAAAAAGAAG",
+        "GAAAAAAAAAAAAAAAGAAG",
+        "GGGGGGGGGGGGGGGGGTTG"]
+    // Create new multidimensional map array with correct dimensions
+    var map = new Array(stringMap.length)
+    // Array consisting of collideable objects
+    var colliders = new Array()
+    var targets = new Array()
+    for (var j = 0; j < map.length; j++) {
+        map[j] = new Array(stringMap[0].length)
+        for (var i = 0; i < map[0].length; i++) {
+            if (stringMap[j][i] == "A") {
+                map[j][i] = new GameObject(32, 32, 32 * i, 32 * j, "black")
+            } else if (stringMap[j][i] == "G") {
+                var newGround = new GameObject(32, 32, 32 * i, 32 * j, "grey")
+                map[j][i] = newGround
+                colliders.push(newGround)
+            } else {
+                var newTarget = new GameObject(32, 32, 32 * i, 32 * j, "red")
+                map[j][i] = newTarget
+                targets.push(newTarget)
+            }
+        }
+    }
+
+    var gameArea = {
+        canvas: document.createElement("canvas"),
+        start: function () {
+            this.canvas.width = frameWidth
+            this.canvas.height = frameHeight
+            this.context = this.canvas.getContext("2d")
+            $("#gameFrame").append(this.canvas) // Insert canvas at the start of body
+            this.frameNo = 0
+            interval = setInterval(update, 20)  // Calls update function every 20 milliseconds
+        }
+    }
+
+    // Player object
+    function Player(width, height, x, y) {
+        this.picture = document.getElementById("lem")
+        this.angle = 0
+        this.angleAcceleration = 0
+        this.width = width
+        this.height = height
+        this.speedX = 0
+        this.speedY = 0
+        this.x = x
+        this.y = y
+        this.gravity = 0.01
+        this.accelerationX = 0
+        this.accelerationY = 0
+        this.acceleration = 0.1
+        this.draw = function () {
+            ctx = gameArea.context
+            ctx.save()
+            //ctx.fillStyle = "red"
+            ctx.translate(this.x + (this.width / 2), this.y + (this.height / 2))
+            ctx.rotate(this.angle * Math.PI / 180)
+            ctx.drawImage(this.picture, -this.width / 2, -this.height / 2)//ctx.fillRect(-this.width/2, -this.height/2, this.width, this.height)
+            // Reset
+            ctx.restore()
+        }
+        this.update = function () {
+            this.angle += this.angleAcceleration
+            this.accelerationY += this.gravity
+            this.speedX += this.accelerationX
+            this.speedY += this.accelerationY
+            this.x += this.speedX
+            this.y += this.speedY
+        }
+        this.input = function () {
+            if (up) {
+                this.accelerationX = Math.sin(this.angle * Math.PI / 180) * this.acceleration
+                this.accelerationY = -Math.cos(this.angle * Math.PI / 180) * this.acceleration
+            } else {
+                this.accelerationX = 0
+                this.accelerationY = 0
+            }
+            if (left) {
+                this.angleAcceleration += -0.1
+            }
+            if (right) {
+                this.angleAcceleration += 0.1
+            }
+        }
+        this.collisionCheck = function (otherobj) {
+            var myleft = this.x
+            var myright = this.x + (this.width)
+            var mytop = this.y
+            var mybottom = this.y + (this.height)
+            var otherleft = otherobj.x
+            var otherright = otherobj.x + (otherobj.width)
+            var othertop = otherobj.y
+            var otherbottom = otherobj.y + (otherobj.height)
+            var crash = true
+            if ((mybottom < othertop) || (mytop > otherbottom) || (myright < otherleft) || (myleft > otherright)) {
+                crash = false
+            }
+            return crash;
+        }
+    }
+
+    // Game object
+    function GameObject(width, height, x, y, color) {
+        this.color = color
+        this.width = width
+        this.height = height
+        this.x = x
+        this.y = y
+        this.draw = function () {
+            ctx = gameArea.context
+            ctx.save()
+            ctx.fillStyle = this.color
+            ctx.fillRect(this.x, this.y, this.width, this.height)
+            ctx.restore()
+        }
+    }
+
+    // Text object
+    function TextObject(x, y, color, text, font) {
+        this.font = font
+        this.text = text
+        this.color = color
+        this.x = x
+        this.y = y
+        this.draw = function () {
+            ctx = gameArea.context
+            ctx.save()
+            ctx.fillStyle = this.color
+            ctx.font = this.font
+            ctx.fillText(this.text, this.x, this.y)
+            ctx.restore()
+        }
+    }
+
+    // Initialize game
+    window.onload = function () {
+        init()
+    }
+    // Init game
+    function init() {
+        // Set points to 0
+        points = 0
+        // Load score text
+        pointsText.text = "Points: 0"
+        // Clear old interval
+        clearInterval(interval)
+        // Load player
+        player = new Player(32, 32, 64, 64)
+        // Load gameArea
+        gameArea.start()
+    }
+
+    // Game over
+    function gameOver() {
+        draw()
+        if (R) {
+            middleText.text = ""
+            init()
+            return
+        }
+    }
+
+    // Draw everything
+    function draw() {
+        // Draw map
+        for (var j = 0; j < map.length; j++) {
+            for (var i = 0; i < map[0].length; i++) {
+                map[j][i].draw()
+            }
+        }
+        // Draw player
+        player.draw()
+        // Draw points
+        pointsText.draw()
+        // Draw score
+        scoreText.draw()
+        // Draw middleText
+        middleText.draw()
+    }
+
+    // Update game
+    function update() {
+        // Update frameNo
+        gameArea.frameNo += 1
+        // Collision check
+        for (var i = 0; i < colliders.length; i++) {
+            if (player.collisionCheck(colliders[i])) {
+                // Crash - Game lost
+                middleText.text = "Game over! Press the 'R' key to try again."
+                // Clear old interval
+                clearInterval(interval)
+                interval = setInterval(gameOver, 20)  // Calls gameOver function every 20 milliseconds
+                return
+            }
+        }
+        for (var i = 0; i < targets.length; i++) {
+            if (player.collisionCheck(targets[i])) {
+                // Make button active
+                $("#submit_score").removeClass('disabled')
+                $("#submit_score").addClass('active')
+                // Win - win screen
+                score = points
+                scoreText.text = "Score: " + score
+                middleText.text = "Game won! Press the 'R' key to try again."
+                // Clear old interval
+                clearInterval(interval)
+                interval = setInterval(gameOver, 20)  // Calls gameOver function every 20 milliseconds
+                return
+            }
+        }
+
+        // Update player
+        player.input()
+        player.update()
+
+        // Update points
+        points = 4000 - gameArea.frameNo
+        if (points < 0) {
+            points = 0
+        }
+        pointsText.text = "Points: " + points
+        // Draw everything
+        draw()
+
+
+    }
+    $(document).ready(function () {
+        "use strict";
+        // Simulates "game over" when a score would be sent
+        $("#submit_score").click(function () {
+            $("#highScoreList").load("{% url 'highScores' %}", {
+                "score": score,
+                "csrfmiddlewaretoken": "{{ csrf_token }}"
+            })
+            // Disable button
+            $("#submit_score").removeClass('active')
+            $("#submit_score").addClass('disabled')
+        })
+    })
+</script>
+{% endblock %}
+
+{% block body %}
+{{ block.super }}
+<div class="container">
+    <div class="page-header">
+        <h1>Lunar Lander</h1>
+        <p>Press W to accelerate, A to turn left and D to turn right.</p>
+    </div>
+    <div class="row justify-content-center">
+        <div class="col-sm-auto" id="gameFrame">
+            <img id="lem" hidden src="{% static 'lunarlander/lem.png' %}">
+        </div>
+        <div class="col">
+            <h3>High scores</h3>
+            <div id="highScoreList">
+                {% include 'lunarlander/highScoreList.html' %}
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col">
+            <a class="btn btn-primary disabled" href="#" role="button" id="submit_score">Submit Score</a>
+
+        </div>
+    </div>
+</div>
+{% endblock %}
